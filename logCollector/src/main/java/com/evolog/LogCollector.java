@@ -52,12 +52,9 @@ public class LogCollector implements AdditionalTargetCollector {
          */
         log.info("Test finished, collect results");
 
-        File logFile = new File(System.getProperty("user.dir") + logFilePath);
-        logFile.getParentFile().mkdirs();
-
         ProcessBuilder pb = new ProcessBuilder("python3", pythonParser, String.valueOf(startTimeEpoch));
         pb.redirectErrorStream(true);
-        pb.redirectOutput(Redirect.appendTo(logFile));
+        pb.redirectOutput(Redirect.appendTo(new File(logFilePath)));
 
         try {
             Process process = pb.start();
