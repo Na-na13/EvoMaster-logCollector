@@ -1,0 +1,8 @@
+__pycache__
+logs/evomaster-logs/*
+logs/test-log
+logs/processbuilder-log
+target/
+drain3_state_no_masking.json
+drain3_state.json
+unique-templates.txt
