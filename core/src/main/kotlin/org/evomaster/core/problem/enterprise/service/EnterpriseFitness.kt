@@ -21,6 +21,7 @@ import org.evomaster.core.database.sql.SqlActionTransformer
 import org.evomaster.core.database.sql.SqlActionUtils
 import org.evomaster.core.remote.service.RemoteController
 import org.evomaster.core.extra.shared.AdditionalTargetCollector
+import org.evomaster.core.extra.logcollector.LogCollector
 import org.evomaster.core.search.action.Action
 import org.evomaster.core.search.action.ActionResult
 import org.evomaster.core.search.FitnessValue
@@ -34,27 +35,12 @@ import org.evomaster.core.search.service.time.SearchTimeController
 import org.evomaster.core.taint.TaintAnalysis
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import java.util.ServiceLoader // ADDED: for loading AdditionalTargetCollector plugins
 import javax.annotation.PostConstruct
 
 abstract class EnterpriseFitness<T> : FitnessFunction<T>() where T : Individual {
 
     companion object {
         private val log: Logger = LoggerFactory.getLogger(EnterpriseFitness::class.java)
-
-        // Discovers AdditionalTargetCollector plugins from the classpath exactly once.
-        // Guice may create several EnterpriseFitness subclass instances for different binding
-        // keys; a class-level lazy ensures ServiceLoader runs only once so each plugin is
-        // instantiated only once regardless of how many fitness instances are created.
-        // Any JAR placed alongside evomaster.jar that contains
-        // META-INF/services/org.evomaster.core.search.AdditionalTargetCollector will be picked up
-        // automatically, allowing external plugins to contribute extra fitness targets without
-        // modifying EvoMaster's core code.
-        private val pluginRegistry: List<AdditionalTargetCollector> by lazy {
-            ServiceLoader.load(AdditionalTargetCollector::class.java, AdditionalTargetCollector::class.java.classLoader)
-                .toList()
-                .onEach { log.info("Loaded AdditionalTargetCollector plugin: ${it.javaClass.name}") }
-        }
     }
 
     @Inject(optional = true)
@@ -71,13 +57,12 @@ abstract class EnterpriseFitness<T> : FitnessFunction<T>() where T : Individual 
 
     private val additionalTargetCollectors = mutableListOf<AdditionalTargetCollector>()
 
-    init {
-        additionalTargetCollectors.addAll(pluginRegistry)
-    }
-
     @PostConstruct
     private fun initialize(){
         //TODO populate additionalTargetCollectors based on config
+        if (config.enableLogCollector) {
+            additionalTargetCollectors.add(LogCollector())
+        }
     }
 
     fun goingToStartExecutingNewTest(){
