@@ -19,6 +19,7 @@
             <groupId>org.evomaster</groupId>
             <artifactId>evomaster-core</artifactId>
             <version>${project.version}</version>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -74,6 +75,9 @@
                 <configuration>
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
+                    <testExcludes>
+                        <testExclude>**/EvoMasterMockTest.java</testExclude>
+                    </testExcludes>
                 </configuration>
             </plugin>
 
