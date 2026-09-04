@@ -29,3 +29,4 @@
 ### `logCollector/src/test/java/com/evolog/EvoMasterMockTest.java`
 - Deleted — was an integration test with hardcoded paths, `System.out.println`, and tight coupling to the old module structure
 
+
