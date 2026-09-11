@@ -5,10 +5,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -37,9 +37,6 @@ public class LogCollector implements AdditionalTargetCollector {
 
   /** Absolute path of the EvoMaster working directory; all output paths are resolved relative to it. */
   private final Path workDir;
-
-  /** Temp file path of parser.py extracted from the JAR at startup. */
-  private String pythonParser;
 
   /** Command used to launch the parser daemon process. */
   private String[] daemonCommand;
@@ -77,9 +74,8 @@ public class LogCollector implements AdditionalTargetCollector {
    *
    * <p><strong>Side effects:</strong></p>
    * <ul>
-   *   <li>Extracts {@code parser.py} from the JAR to a temporary file on disk.</li>
    *   <li>Creates {@code logs/} and {@code templates/} directories under the working directory.</li>
-   *   <li>Spawns a long-lived Python daemon subprocess ({@code python3 parser.py}).</li>
+   *   <li>Pulls and starts the parser daemon as a Docker container ({@code nanarei/evolog-parser:latest}).</li>
    *   <li>Registers a JVM shutdown hook that closes the daemon and deletes collected log files.</li>
    * </ul>
    */
@@ -87,21 +83,22 @@ public class LogCollector implements AdditionalTargetCollector {
     workDir = Paths.get("").toAbsolutePath();
     composeProject = System.getenv("LOG_COLLECTOR_PROJECT");
 
-    // Extract parser.py from the JAR to a temp file so it is available at runtime
-    // regardless of where the JAR is placed.
-    try {
-      Path parserTemp = Files.createTempFile("evomaster-parser-", ".py");
-      parserTemp.toFile().deleteOnExit();
-      try (InputStream is = LogCollector.class.getResourceAsStream("/parser.py")) {
-        if (is == null) throw new RuntimeException("parser.py not found inside the JAR");
-        Files.copy(is, parserTemp, StandardCopyOption.REPLACE_EXISTING);
-      }
-      pythonParser = parserTemp.toString();
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to extract parser.py from JAR", e);
+    // Build the docker run command. The parser daemon runs as a container so the
+    // user needs no local Python installation. The Docker socket is mounted so the
+    // container can reach the host Docker daemon to fetch SUT container logs.
+    List<String> cmd = new ArrayList<>(Arrays.asList(
+        "docker", "run", "--rm", "-i",
+        "-v", workDir + "/logs:/app/logs",
+        "-v", workDir + "/templates:/app/templates",
+        "-v", "/var/run/docker.sock:/var/run/docker.sock"
+    ));
+    if (composeProject != null && !composeProject.isEmpty()) {
+      cmd.add("-e");
+      cmd.add("COMPOSE_PROJECT=" + composeProject);
     }
+    cmd.add("nanarei/evolog-parser:latest");
+    daemonCommand = cmd.toArray(new String[0]);
 
-    daemonCommand = new String[]{"python3", "-u", pythonParser};
     initCommon();
   }
 
@@ -159,9 +156,6 @@ public class LogCollector implements AdditionalTargetCollector {
   private void startDaemon() throws IOException {
     ProcessBuilder pb = new ProcessBuilder(daemonCommand);
     pb.directory(workDir.toFile());
-    if (composeProject != null && !composeProject.isEmpty()) {
-      pb.environment().put("COMPOSE_PROJECT", composeProject);
-    }
     // Redirect daemon stderr to the log file so debug output does not pollute the IPC stdout channel.
     pb.redirectError(new File(logFilePath));
     daemonProcess = pb.start();
